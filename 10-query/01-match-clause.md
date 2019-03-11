@@ -4,33 +4,61 @@ pageTitle: Match Clause
 permalink: /docs/query/match-clause
 ---
 
-## Match Concept Types and Their Instances
-`match` clause describes a pattern in the knowledge graph. In other words, it uses the semantics of the knowledge graph as defined in the [schema](/docs/schema/overview) to find a specific match. We can use the `match` clause to target instances of data or concepts defined in the schema.
+## Match Clause
+Match clauses are used to retrieve data instances and schema types that follow a particular pattern. Using match clauses forms the basis of our data retrieval.
+By defining the [schema](/docs/schema/overview), we effectively define a vocabulary to be used to describe concepts of our domain. 
 
-<div class = "note">
-[Note]
-**For those developing with Client [Java](/docs/client-api/java)**: Executing a query that contains a `match` clause, is as simple as calling the [`withTx().execute()`](/docs/client-api/java#client-api-method-eager-executation-of-a-graql-query) method on the query object.
-</div>
+Once the schema is defined, we can form graph patterns that we want to search for in our knowledge graph. We do that by using match clauses.
+Each match clause represents a particular graph pattern via its corresponding query pattern. The match clauses are then executed as a part of Get query returning tuples of instances fulfilling the specified pattern.
 
-<div class = "note">
-[Note]
-**For those developing with Client [Node.js](/docs/client-api/nodejs)**: Executing a query that contains a `match` clause, is as simple as passing the Graql(string) query to the [`query()`](/docs/client-api/nodejs#client-api-method-lazily-execute-a-graql-query) function available on the [`transaction`](/docs/client-api/nodejs#client-api-title-transaction) object.
-</div>
 
-<div class = "note">
-[Note]
-**For those developing with Client [Python](/docs/client-api/python)**: Executing a query that contains a `match` clause, is as simple as passing the Graql(string) query to the [`query()`](/docs/client-api/python#client-api-method-lazily-execute-a-graql-query) method available on the [`transaction`](/docs/client-api/python#client-api-title-transaction) object.
-</div>
+## Query pattern anatomy
+As we have seen before, at the core of each query sits a query pattern that describes a subgraph of our particular interest. Here we examine the structure of query patterns closer. In general patterns can be thought of as 
+different arrangements of collection of statements. Graql statements constitute the smallest building blocks of queries. Let's have a look at one then:
 
-## Variables
-Graql assigns instances of data and schema concepts to variables. A Graql variable is prefixed with `$` and is simply a placeholder for an instance of a concept type or simply a hard-coded value.
+![Statement structure](/docs/images/query/statement-structure.png)
 
-In case of a hard-coded value, the accepted datatypes are:
-- `long`: a 64-bit signed integer.
-- `double`: a double-precision floating point number, including a decimal point.
-- `string`: enclosed in double `"` or single `'` quotes
-- `boolean`: `true` or `false`
-- `date`: a date or date-time in ISO 8601 format
+  * Each statement starts with a __variable__ (V) providing a concept reference. We can reference both data and schema concepts via variables. A Graql variable is prefixed with a dollar sign `$`.
+
+  * The variable is followed by a comma-separated list of properties (P1, P2, P3) describing the concepts the variable refers to. Here we can see that all concepts `$p` refers to must be of type `person` 
+  and have an attribute of type `name` and value `Bob` attached. Additionally we request the concepts to have an attribute of type `phone-number` attached and we signal that we want to fetch them as well by defining an extra `$phone` variable.
+  Consequently, after performing a match on this statement, we should obtain pairs of concepts that satisfy our statement.
+  
+  * we mark the end of the statement with a semi-colon `;`.
+  
+There is some freedom in forming and composing our statements. For example we could write our single statement with three properties as three combined statements:
+
+```graql
+$p isa person;
+$p has name 'Bob';
+$p has phone-nunmber $phone;
+```
+
+Consequently, we arrive at the subject of pattern composition. We already know that statements are the smallest building blocks, however we have a number of possibilities of arranging them together. 
+In that way, we can express more complex pattern scenarios and their corresponding subgraphs. We allow the following ways to arrange statements together:
+
+
+![Pattern structure](/docs/images/query/pattern-structure.png) 
+
+1. Statement - single basic building block as explained above.
+2. Conjunction - set of patterns where to satisfy a match all patterns must be matched. We form conjunctions by separating the partaking patterns with semi-colons `;`.
+3. Disjunction - set of patterns where to satisfy a match at least one pattern must be matched. We form disjunctions by ienclosing the partaking patterns within curly braces and interleaving them with an `or` keyword.
+4. Negation - defines a conjunctive pattern that explicitly defines conditions not to be met. We form negations by defining the pattern of interest inside a `not{};` block.
+
+To illustrate the possibilities better, we will now look at an example pattern:
+
+![Example pattern](/docs/images/query/example-pattern.png)
+The pattern describes pairs of `person` that are married,  went to the same `school` and are employed by the same `company`. 
+The pattern additionally specifies the company to be either `Pharos` or `Cybersafe` with the school not being the `HCC` one. Additionally the pattern 
+asks to fetch the `full-name` of each of the people in the pair.
+The pattern is a conjunction of four different patterns: 
+- conjunction `C1` - specifies the variables for people, school and organisation, specifies their types and asks for `full-name`s of people.
+- disjunction `D` - specifies that the companies of interest are either `Pharos` or `Cybersafe`
+- negation `N` - specifies that we are not interested in the `HCC` school
+- conjunction `C2` - defines the pattern requiring the people to be married (`marriage` relationship), attend the same school (`school-course-enrollment` relationship) and
+work at the same company (`employment` relationship)
+
+In the subsequent sections, we shall see how to match specific graph patterns.
 
 ## Match Instances of Concept Types
 What follows in this section, describes how we can use the `match` keyword to find instances of data that we are interested in. What we choose to do with the matched result, is out of the scope of this section. But for the sake of completeness, we end each `match` clause with `get;`. In the next section, we learn about [using _get_ for retrieval of information from the knowledge graph](/docs/query/get-query).
@@ -48,7 +76,7 @@ match $p isa person; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   Graql.var("p").isa("person")
 ).get();
 ```
@@ -70,7 +98,7 @@ match $p isa person, has full-name $n; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("p").isa("person").has("full-name", var("n"))
 ).get();
 ```
@@ -80,8 +108,8 @@ GetQuery query = Graql.match(
 
 We soon learn [how to target attributes of a specific value](#match-instances-of-an-attribute).
 
-### Match instances of a relationship
-Because of the [dependent nature of relationships](/docs/schema/concepts#define-a-relationship), matching them is slightly different to matching entities and attributes.
+### Match instances of a relation
+Because of the [dependent nature of relations](/docs/schema/concepts#define-a-relation), matching them is slightly different to matching entities and attributes.
 
 <div class="tabs dark">
 
@@ -93,41 +121,39 @@ match $emp (employer: $x, employee: $y) isa employment; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("emp").isa("employment").rel("employer", "x").rel("employee", "y")
 ).get();
 ```
 [tab:end]
 </div>
 
-The example above, for every employment, assigns the instance of the employment (relationship) type to the variable `$emp`, the instance of the employer company (entity) type to the variable `$x` and the instance of the employee person (entity) type to the variable `$y`.
+The example above, for every employment, assigns the instance of the employment (relation) type to the variable `$emp`, the instance of the employer organisation (entity) type to the variable `$x` and the instance of the employee person (entity) type to the variable `$y`.
 
-#### Instances of a relationship with particular attributes
-To only match the instances of relationships that own a specific attribute, we use the `has` keyword followed by the attribute's label and a variable.
+#### Instances of a relation with particular attributes
+To only match the instances of relations that own a specific attribute, we use the `has` keyword followed by the attribute's label and a variable.
 
 <div class="tabs dark">
 
 [tab:Graql]
 ```graql
-match $emp (employer: $x, exmployee: $y) isa employment, has reference-id $ref; get;
+match $emp (employer: $x, employee: $y) isa employment, has reference-id $ref; get;
 ```
 [tab:end]
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("emp").isa("employment").rel("employer", "x").rel("employee", "y").has("reference-id", var("ref"))
 ).get();
-
-Stream&lt;ConceptMap&gt; answers = transaction.stream(query.toString());
 ```
 [tab:end]
 </div>
 
 We soon learn [how to target attributes of a specific value](#match-instances-of-an-attribute).
 
-#### Leave the relationship instance unassigned
-Assigning a relationship to a variable is optional. We may only be interested in the roleplayers of a certain relationship. In such case, we would write the above match clause like so:
+#### Leave the relation instance unassigned
+Assigning a relation to a variable is optional. We may only be interested in the roleplayers of a certain relation. In such case, we would write the above match clause like so:
 
 <div class="tabs dark">
 
@@ -139,7 +165,7 @@ match (employer: $x, employee: $y) isa employment; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var().isa("employment").rel("employer", "x").rel("employee", "y")
 ).get();
 ```
@@ -147,7 +173,7 @@ GetQuery query = Graql.match(
 </div>
 
 #### Leave the roles out
-We can always chose to not include the lable of roles when matching a relationship. This, especially, makes sense when matching a relationship that relates to only one role.
+We can always chose to not include the lable of roles when matching a relation. This, especially, makes sense when matching a relation that relates to only one role.
 
 <div class="tabs dark">
 
@@ -159,7 +185,7 @@ match $fr ($x, $y) isa friendship; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("fr").isa("friendship").rel("x").rel("y")
 ).get();
 ```
@@ -182,7 +208,7 @@ match $x "like"; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("x").val("like")
 ).get();
 ```
@@ -198,13 +224,13 @@ We can match instances of attributes based on their value regardless of what con
 
 [tab:Graql]
 ```graql
-match $n isa nickname "Mitzi"; get;
+match $n isa nickname; $n "Mitzi"; get;
 ```
 [tab:end]
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("x").isa("nickname").val("Mitzi")
 ).get();
 ```
@@ -226,8 +252,8 @@ match $phone-number contains "+44"; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
-  var("phone-number").val(contains("+44"))
+GraqlGet query = Graql.match(
+  var("phone-number").contains("+44")
 ).get();
 ```
 [tab:end]
@@ -242,14 +268,14 @@ The value of an attribute can also be matched using a regex.
 
 [tab:Graql]
 ```graql
-match $x /.*(Miriam Morton|Solomon Tran).*/; get;
+match $x like "(Miriam Morton|Solomon Tran)"; get;
 ```
 [tab:end]
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
-  var("phone-number").val(regex("(Miriam Morton|Solomon Tran)"))
+GraqlGet query = Graql.match(
+  var("phone-number").regex("(Miriam Morton|Solomon Tran)")
 ).get();
 ```
 [tab:end]
@@ -264,14 +290,14 @@ To match instances of a concept type that owns multiple attributes, we can simpl
 
 [tab:Graql]
 ```graql
-match $p isa person, has nickname $nn, has last-name $ln; get;
+match $p isa person, has nickname $nn, has full-name $fn; get;
 ```
 [tab:end]
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
-  var("phone-number").val(regex("(Mary|Barbara)"))
+GraqlGet query = Graql.match(
+  var("p").isa("person").has("nickname", var("nn")).has("full-name", var("fn"))
 ).get();
 ```
 [tab:end]
@@ -290,8 +316,8 @@ match $p isa person, has nickname "Mitzi", has phone-number contains "+44"; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
-  var("p").isa("person").has("nickname", "Mitzi").has("phone-number", contains("+44"))
+GraqlGet query = Graql.match(
+  var("p").isa("person").has("nickname", "Mitzi").has("phone-number", Graql.contains("+44"))
 ).get();
 ```
 [tab:end]
@@ -309,9 +335,9 @@ match $p isa person, has nickname "Mitzi", has phone-number $pn; $pn contains "+
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("p").isa("person").has("nickname", "Mitzi").has("phone-number", var("pn")),
-  var("pn").val(contains("+44"))
+  var("pn").contains("+44")
 ).get();
 ```
 [tab:end]
@@ -330,11 +356,11 @@ match $p isa person, has full-name $fn; { $fn contains "Miriam"; } or { $fn cont
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("p").isa("person").has("full-name", var("fn")),
   or(
-    var("fn").val(contains("Miriam")),
-    var("fn").val(contains("Solomon"))
+    var("fn").contains("Miriam"),
+    var("fn").contains("Solomon")
   )
 ).get();
 ```
@@ -354,30 +380,33 @@ match $rr isa! romantic-relationship; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
-  var("rr").isaExplicit("romantic-relationship")
+GraqlGet query = Graql.match(
+  var("rr").isaX("romantic-relationship")
 ).get();
 ```
 [tab:end]
 </div>
 
-This query matches only the direct instances of `romantic-relationship`. That means the instances of `open-relationship`, `domestic-relationship` and `complicated-relationship` (which all subtype `romantic-relationship`) would not be included.
+This query matches only the direct instances of `romantic-relationship`. That means the instances of `open-relation`, `domestic-relation` and `complicated-relation` (which all subtype `romantic-relationship`) would not be included.
 
 ### One particular instance
-To match a particular instance with the given ID, we use the `id` keyword followed by the `id` assigned to the instance by Grakn.
+Grakn assignes an auto-generated id to each instance. Although, this id is generated by Grakn solely for internal use, it is indeed possible to find an instance with its Grakn id.
+To do so, we use the `id` keyword followed by the `id` assigned to the instance by Grakn.
 
 <div class="tabs dark">
 
 [tab:Graql]
+<!-- test-ignore -->
 ```graql
 match $x id V41016; get;
 ```
 [tab:end]
 
 [tab:Java]
+<!-- test-ignore -->
 ```java
-GetQuery query = Graql.match(
-  var("x").id(ConceptId.of("V41016"))
+GraqlGet query = Graql.match(
+  var("x").id("V41016")
 ).get();
 ```
 [tab:end]
@@ -395,44 +424,45 @@ Having fully understood the [schema concepts](/docs/schema/concepts) and how the
 To match all concepts of a given type, we use the `sub` keyword. Here are the examples for matching subtypes of all concept types, including `thing` that is a supertype to all other types.
 
 <div class="tabs dark">
-<!-- ignore-test -->
 [tab:Graql]
 ```graql
 match $x sub thing; get;
 match $x sub attribute; get;
 match $x sub entity; get;
 match $x sub role; get;
-match $x sub relationship; get;
+match $x sub relation; get;
 ```
 [tab:end]
 
 [tab:Java]
+<!-- test-edge-case -->
+<!-- ignore-test -->
 ```java
-GetQuery query_a = Graql.match(
+GraqlGet query_a = Graql.match(
   var("x").sub("thing")
 ).get();
 
-GetQuery query_b = Graql.match(
+GraqlGet query_b = Graql.match(
   var("x").sub("attribute")
 ).get();
 
-GetQuery query_c = Graql.match(
+GraqlGet query_c = Graql.match(
   var("x").sub("entity")
 ).get();
 
-GetQuery query_d = Graql.match(
+GraqlGet query_d = Graql.match(
   var("x").sub("role")
 ).get();
 
-GetQuery query_e = Graql.match(
-  var("x").sub("relationship")
+GraqlGet query_e = Graql.match(
+  var("x").sub("relation")
 ).get();
 ```
 [tab:end]
 </div>
 
-### Roles of a given relationship
-Given a particular relationship, we can use the `relates` keyword to match all roles related to the given relationship type.
+### Roles of a given relation
+Given a particular relation, we can use the `relates` keyword to match all roles related to the given relation type.
 
 <div class="tabs dark">
 
@@ -443,18 +473,19 @@ match employment relates $x; get;
 [tab:end]
 
 [tab:Java]
+[tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   type("employment").relates(var("x"))
 ).get();
 ```
 [tab:end]
 </div>
 
-This matches all roles of the `employment` relationship - `employer` and `employee`.
+This matches all roles of the `employment` relation - `employer` and `employee`.
 
-#### Subroles of a given role in a super-relationship
-When we learned about [subtyping relationships](/docs/schema/concepts#subtype-a-relationship), we saw that a role related to a sub-relationship is linked to a corresponding parent's role using the `as` keyword. We can use the same keyword in a `match` clause to match the corresponding role in the given sub-relationship.
+#### Subroles of a given role in a super-relation
+When we learned about [subtyping relations](/docs/schema/concepts#subtype-a-relation), we saw that a role related to a sub-relation is linked to a corresponding parent's role using the `as` keyword. We can use the same keyword in a `match` clause to match the corresponding role in the given sub-relation.
 
 <div class="tabs dark">
 
@@ -466,7 +497,7 @@ match location-of-office relates $x as located-subject; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   type("location-of-office").relates(var("x")),
   var("x").sub("located-subject")
 ).get();
@@ -474,7 +505,7 @@ GetQuery query = Graql.match(
 [tab:end]
 </div>
 
-This matches all the roles that correspond to the `located-subject` role of the relationship which `location-of-office` subtypes. In this case, the super-relationship being `location-of-everything` and the matched role being `located-subject`.
+This matches all the roles that correspond to the `located-subject` role of the relation which `location-of-office` subtypes. In this case, the super-relation being `location-of-everything` and the matched role being `located-subject`.
 
 ### Roleplayers of a given role
 Given a role, we can match the concept types that play the given role by using the `plays` keyword.
@@ -489,14 +520,14 @@ match $x plays employee; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("x").plays("employee")
 ).get();
 ```
 [tab:end]
 </div>
 
-This matches all concept types that play the role `employee` in any relationship.
+This matches all concept types that play the role `employee` in any relation.
 
 ### Owners of a given attribute
 Given an attribute type, we can match the concept types that own the given attribute type by using the `has` keyword.
@@ -511,7 +542,7 @@ match $x has title; get;
 
 [tab:Java]
 ```java
-GetQuery query = Graql.match(
+GraqlGet query = Graql.match(
   var("x").has("title")
 ).get();
 ```
@@ -522,6 +553,21 @@ This matches all concept types that own `title` as their attribute.
 
 ## Examples
 To see some `get` queries powered by complex and expressive `match` clauses, check out the [examples of querying a sample knowledge graph](/docs/examples/queries).
+
+<div class = "note">
+[Note]
+**For those developing with Client [Java](/docs/client-api/java)**: Executing a query that contains a `match` clause, is as simple as calling the [`withTx().execute()`](/docs/client-api/java#client-api-method-eagerly-execute-of-a-graql-query) method on the query object.
+</div>
+
+<div class = "note">
+[Note]
+**For those developing with Client [Node.js](/docs/client-api/nodejs)**: Executing a query that contains a `match` clause, is as simple as passing the Graql(string) query to the [`query()`](/docs/client-api/nodejs#client-api-method-lazily-execute-a-graql-query) function available on the [`transaction`](/docs/client-api/nodejs#client-api-title-transaction) object.
+</div>
+
+<div class = "note">
+[Note]
+**For those developing with Client [Python](/docs/client-api/python)**: Executing a query that contains a `match` clause, is as simple as passing the Graql(string) query to the [`query()`](/docs/client-api/python#client-api-method-lazily-execute-a-graql-query) method available on the [`transaction`](/docs/client-api/python#client-api-title-transaction) object.
+</div>
 
 ## Summary
 We learned how to use the `match` clause to write intuitive statements that describe a desired pattern in the knowledge graph and fill in the variables that hold the data we would like to acquire.
